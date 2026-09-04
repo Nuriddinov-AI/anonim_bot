@@ -20,6 +20,7 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 to_user_id INTEGER NOT NULL,
+                from_user_id INTEGER,
                 from_info TEXT,
                 question TEXT NOT NULL,
                 answer TEXT,
@@ -28,6 +29,11 @@ async def init_db():
                 FOREIGN KEY (to_user_id) REFERENCES users(telegram_id)
             );
         """)
+        try:
+            await db.execute("ALTER TABLE questions ADD COLUMN from_user_id INTEGER")
+            await db.commit()
+        except:
+            pass
         await db.commit()
 
 async def add_user(telegram_id, username, full_name, phone=None):
@@ -86,9 +92,7 @@ async def answer_question(question_id, answer):
 async def get_all_users():
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM users ORDER BY created_at DESC"
-        ) as cur:
+        async with db.execute("SELECT * FROM users ORDER BY created_at DESC") as cur:
             return await cur.fetchall()
 
 async def get_stats(user_id):

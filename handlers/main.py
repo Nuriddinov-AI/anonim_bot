@@ -45,6 +45,7 @@ async def start(message: Message, state: FSMContext):
         code = args[1]
         target = await get_user_by_code(code)
         if target and target['telegram_id'] != message.from_user.id:
+            await state.set_state(States.writing_question)
             await state.update_data(target_id=target['telegram_id'], target_code=code)
             name = target['full_name'] or "Foydalanuvchi"
             await message.answer(
@@ -53,7 +54,6 @@ async def start(message: Message, state: FSMContext):
                 "✍️ Savolingizni yozing:",
                 parse_mode="HTML"
             )
-            await state.set_state(States.writing_question)
             return
         elif target and target['telegram_id'] == message.from_user.id:
             await message.answer("😅 O'zingizning havolangizga kira olmaysiz!", reply_markup=main_menu())
@@ -71,14 +71,15 @@ async def start(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("ask_"))
 async def ask_again(callback: CallbackQuery, state: FSMContext):
-    code = callback.data.split("_")[1]
+    await state.clear()
+    code = callback.data[4:]
     target = await get_user_by_code(code)
     if not target:
         await callback.answer("Foydalanuvchi topilmadi!", show_alert=True)
         return
+    await state.set_state(States.writing_question)
     await state.update_data(target_id=target['telegram_id'], target_code=code)
     await callback.message.answer("✍️ Yangi savolingizni yozing:")
-    await state.set_state(States.writing_question)
     await callback.answer()
 
 @router.message(States.writing_question)
@@ -135,17 +136,18 @@ async def my_questions(message: Message):
 
 @router.callback_query(F.data.startswith("ans_"))
 async def start_answer(callback: CallbackQuery, state: FSMContext):
-    q_id = int(callback.data.split("_")[1])
+    q_id = int(callback.data[4:])
     q = await get_question(q_id)
     if not q or q['to_user_id'] != callback.from_user.id:
         await callback.answer("Bu savol sizniki emas!", show_alert=True)
         return
+    await state.clear()
+    await state.set_state(States.writing_answer)
     await state.update_data(question_id=q_id)
     await callback.message.answer(
         "💬 Javobingizni yozing:\n\nSavol: <i>" + q['question'] + "</i>",
         parse_mode="HTML"
     )
-    await state.set_state(States.writing_answer)
     await callback.answer()
 
 @router.message(States.writing_answer)
@@ -158,7 +160,7 @@ async def send_answer(message: Message, state: FSMContext):
     q = await get_question(q_id)
     await answer_question(q_id, message.text)
     await state.clear()
-    await message.answer("✅ Javobingiz yuborildi!")
+    await message.answer("✅ Javobingiz yuborildi!", reply_markup=main_menu())
 
     if q and q['from_user_id']:
         try:
@@ -167,7 +169,10 @@ async def send_answer(message: Message, state: FSMContext):
                 "📩 <b>Savolingizga javob keldi!</b>\n\n"
                 "❓ Savol: <i>" + q['question'] + "</i>\n\n"
                 "💬 Javob: <b>" + message.text + "</b>",
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=ask_again_kb(
+                    (await get_user(q['to_user_id']))['link_code']
+                )
             )
         except:
             pass

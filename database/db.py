@@ -51,11 +51,11 @@ async def get_user_by_code(code):
         async with db.execute("SELECT * FROM users WHERE link_code=?", (code,)) as cur:
             return await cur.fetchone()
 
-async def send_question(to_user_id, from_info, question):
+async def send_question(to_user_id, from_user_id, from_info, question):
     async with aiosqlite.connect(DB) as db:
         cursor = await db.execute(
-            "INSERT INTO questions (to_user_id, from_info, question) VALUES (?,?,?)",
-            (to_user_id, from_info, question)
+            "INSERT INTO questions (to_user_id, from_user_id, from_info, question) VALUES (?,?,?,?)",
+            (to_user_id, from_user_id, from_info, question)
         )
         await db.commit()
         return cursor.lastrowid
